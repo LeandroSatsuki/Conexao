@@ -96,6 +96,13 @@ The compose stack starts:
 - `GET /api/v1/jobs/dead-letter?tenant_id=...` lists jobs waiting for manual recovery.
 - Each execution uses a unique `correlation_id` shared by the job, logs, and errors.
 
+## Sankhya connection test
+- `POST /api/v1/connections/{connection_id}/test?tenant_id=...&mode=mock` keeps the simulated path.
+- `mode=real` runs OAuth 2.0 `POST /authenticate` against the configured Sankhya environment.
+- `read_check=true` optionally runs a read-only `loadRecords` validation after auth.
+- No token, secret, or X-Token is returned by the API or written to logs.
+- This stage does not write any data to Sankhya and does not use `DatasetSP.save`.
+
 ## Operational flow
 1. Create a tenant.
 2. Create source and target connections.

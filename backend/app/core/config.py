@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     cors_origins: str = Field(default="*", alias="CORS_ORIGINS")
     default_tenant_id: str = Field(default="preferenza", alias="DEFAULT_TENANT_ID")
     sankhya_timeout_seconds: int = Field(default=30, alias="SANKHYA_TIMEOUT_SECONDS")
+    sankhya_auth_timeout_seconds: int = Field(default=30, alias="SANKHYA_AUTH_TIMEOUT_SECONDS")
+    sankhya_sandbox_base_url: str = Field(
+        default="https://api.sandbox.sankhya.com.br", alias="SANKHYA_SANDBOX_BASE_URL"
+    )
+    sankhya_production_base_url: str = Field(default="https://api.sankhya.com.br", alias="SANKHYA_PRODUCTION_BASE_URL")
+    sankhya_default_environment: str = Field(default="sandbox", alias="SANKHYA_DEFAULT_ENVIRONMENT")
+    sankhya_read_test_entity: str = Field(default="", alias="SANKHYA_READ_TEST_ENTITY")
+    sankhya_read_test_fields: str = Field(default="", alias="SANKHYA_READ_TEST_FIELDS")
+    sankhya_read_test_limit: int = Field(default=1, alias="SANKHYA_READ_TEST_LIMIT")
     celery_broker_url: str | None = Field(default=None, alias="CELERY_BROKER_URL")
     celery_result_backend: str | None = Field(default=None, alias="CELERY_RESULT_BACKEND")
     celery_task_always_eager: bool = Field(default=False, alias="CELERY_TASK_ALWAYS_EAGER")
@@ -41,6 +50,13 @@ class Settings(BaseSettings):
     @property
     def result_backend(self) -> str:
         return self.celery_result_backend or self.redis_url
+
+    @property
+    def sankhya_read_test_fields_list(self) -> list[str]:
+        value = self.sankhya_read_test_fields.strip()
+        if not value:
+            return []
+        return [item.strip() for item in value.split(",") if item.strip()]
 
 
 @lru_cache(maxsize=1)

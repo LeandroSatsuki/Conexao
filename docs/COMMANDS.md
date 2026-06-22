@@ -7,10 +7,10 @@
 - `Criar novo fluxo`
 - `Adicionar novo endpoint`
 - `Criar nova entidade`
-- `Corrigir erro de integração`
+- `Corrigir erro de integracao`
 - `Adicionar novo mapeamento`
 - `Criar teste`
-- `Subir versão`
+- `Subir versao`
 
 ## Local commands
 - `docker compose up --build`
@@ -31,6 +31,11 @@
 - `Reprocessar job` -> `POST /api/v1/jobs/{job_id}/reprocess`
 - `Cancelar job` -> `POST /api/v1/jobs/{job_id}/cancel`
 - `Consultar log` -> `GET /api/v1/logs?tenant_id=...`
+
+## Sankhya connection test
+- `Teste mock` -> `POST /api/v1/connections/{connection_id}/test?tenant_id=...&mode=mock`
+- `Teste real` -> `POST /api/v1/connections/{connection_id}/test?tenant_id=...&mode=real`
+- `Read check` -> `POST /api/v1/connections/{connection_id}/test?tenant_id=...&mode=real&read_check=true`
 
 ## Worker
 - API and worker can be started together with `docker compose up --build`.

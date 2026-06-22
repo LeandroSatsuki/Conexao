@@ -12,9 +12,13 @@ from sqlalchemy.orm import Session
 from app.connectors.registry import DEFAULT_CONNECTOR_REGISTRY, ConnectorRegistry
 from app.connectors.sankhya.exceptions import (
     SankhyaAuthenticationError,
+    SankhyaAuthorizationError,
     SankhyaError,
+    SankhyaExternalAPIError,
     SankhyaRateLimitError,
     SankhyaTimeoutError,
+    SankhyaUnknownError,
+    SankhyaValidationError,
 )
 from app.connectors.sankhya.services import build_connector_from_connection, mask_connection_credentials
 from app.core.exceptions import FlowExecutionError
@@ -298,16 +302,32 @@ class IntegrationRunner:
         )
         return job
 
-    def test_connection(self, connection: Connection, correlation_id: str | None = None) -> dict[str, str | bool]:
+    def test_connection(
+        self,
+        connection: Connection,
+        correlation_id: str | None = None,
+        *,
+        mode: str = "mock",
+        read_check: bool = False,
+    ) -> dict[str, Any]:
         started_at = datetime.now(UTC)
         log_id = str(uuid4())
         connector = None
         try:
             connector = self.build_connector(connection)
-            result = connector.test_connection()
+            if connection.platform.lower() == "sankhya":
+                result = connector.test_connection(mode=mode, read_check=read_check)
+            else:
+                result = connector.test_connection()
+            result_data = result.model_dump() if hasattr(result, "model_dump") else result
+            operation = str(result_data.get("operation") or "connection_test")
             connection.status = "active"
             connection.last_test_status = "success"
             connection.last_test_at = datetime.now(UTC)
+            payload_masked = {
+                "connection": mask_connection_credentials(connection) or {},
+                "result": mask_payload(result_data.get("details") or {}),
+            }
             log = self._write_log(
                 id=log_id,
                 tenant_id=connection.tenant_id,
@@ -323,24 +343,34 @@ class IntegrationRunner:
                 correlation_id=correlation_id,
                 duration_ms=int((datetime.now(UTC) - started_at).total_seconds() * 1000),
                 error_type=None,
-                payload_masked=json.dumps(mask_connection_credentials(connection) or {}, ensure_ascii=False),
+                operation=operation,
+                payload_masked=json.dumps(mask_payload(payload_masked), ensure_ascii=False),
             )
             self.session.add(log)
             return {
                 "success": True,
-                "message": str(result.get("message", "Connection successful")),
+                "message": str(result_data.get("message", "Connection successful")),
                 "connection_id": connection.id,
                 "tenant_id": connection.tenant_id,
                 "platform": connection.platform,
                 "status": connection.status,
                 "last_test_status": connection.last_test_status or "success",
                 "log_id": log.id,
+                "correlation_id": correlation_id,
+                "mode": result_data.get("mode", mode),
+                "read_check": bool(result_data.get("read_check", read_check)),
+                "operation": operation,
+                "details": result_data.get("details", {}),
             }
         except Exception as exc:
             normalized = connector.normalize_error(exc) if connector is not None else self._normalize_exception(exc)
             connection.status = "error"
             connection.last_test_status = "failed"
             connection.last_test_at = datetime.now(UTC)
+            payload_masked = {
+                "connection": mask_connection_credentials(connection) or {},
+                "error": normalized.get("raw_error_masked") or {},
+            }
             log = self._write_log(
                 id=log_id,
                 tenant_id=connection.tenant_id,
@@ -348,26 +378,42 @@ class IntegrationRunner:
                 flow_id=None,
                 job_id=None,
                 status="failed",
-                message=normalized["message"],
+                message=normalized.get("normalized_message") or normalized.get("message", "Connection test failed"),
                 source_platform=connection.platform,
                 target_platform=connection.platform,
                 source_entity=None,
                 target_entity=None,
                 correlation_id=correlation_id,
                 duration_ms=int((datetime.now(UTC) - started_at).total_seconds() * 1000),
-                error_type=normalized["category"],
-                payload_masked=json.dumps(mask_connection_credentials(connection) or {}, ensure_ascii=False),
+                error_type=normalized.get("error_type") or normalized.get("category"),
+                operation="connection_test",
+                payload_masked=json.dumps(mask_payload(payload_masked), ensure_ascii=False),
             )
             self.session.add(log)
+            self._record_connection_error(
+                tenant_id=connection.tenant_id,
+                log_id=log.id,
+                error_type=normalized.get("error_type") or normalized.get("category") or "unknown_error",
+                error_message=str(exc),
+                normalized_message=normalized.get("normalized_message") or normalized.get("message", str(exc)),
+                raw_error=exc,
+                retryable=bool(normalized.get("retryable", False)),
+                correlation_id=correlation_id,
+            )
             return {
                 "success": False,
-                "message": normalized["message"],
+                "message": normalized.get("normalized_message") or normalized.get("message", "Connection test failed"),
                 "connection_id": connection.id,
                 "tenant_id": connection.tenant_id,
                 "platform": connection.platform,
                 "status": connection.status,
                 "last_test_status": connection.last_test_status or "failed",
                 "log_id": log.id,
+                "correlation_id": correlation_id,
+                "mode": mode,
+                "read_check": read_check,
+                "operation": "connection_test",
+                "details": {},
             }
 
     def run_flow(
@@ -572,6 +618,7 @@ class IntegrationRunner:
         correlation_id: str | None,
         duration_ms: int | None,
         error_type: str | None,
+        operation: str | None,
         payload_masked: str | None,
     ) -> IntegrationLog:
         log = IntegrationLog(
@@ -583,6 +630,7 @@ class IntegrationRunner:
             status=status,
             message=message,
             event_type="connection_test" if connection_id and job_id is None else "flow_execution",
+            operation=operation,
             correlation_id=correlation_id,
             source_platform=source_platform,
             target_platform=target_platform,
@@ -671,6 +719,7 @@ class IntegrationRunner:
             status=status,
             message=message,
             event_type="flow_execution",
+            operation="flow_execution",
             correlation_id=correlation_id,
             source_platform=source_connection.platform if source_connection is not None else None,
             target_platform=target_connection.platform if target_connection is not None else None,
@@ -697,6 +746,14 @@ class IntegrationRunner:
             return ExecutionClassification("rate_limit_error", str(exc), True)
         if isinstance(exc, SankhyaAuthenticationError):
             return ExecutionClassification("authentication_error", str(exc), False)
+        if isinstance(exc, SankhyaAuthorizationError):
+            return ExecutionClassification("authorization_error", str(exc), False)
+        if isinstance(exc, SankhyaValidationError):
+            return ExecutionClassification("validation_error", str(exc), False)
+        if isinstance(exc, SankhyaExternalAPIError):
+            return ExecutionClassification("external_api_error", str(exc), True)
+        if isinstance(exc, SankhyaUnknownError):
+            return ExecutionClassification("unknown_error", str(exc), False)
         if isinstance(exc, SankhyaError):
             return ExecutionClassification("external_api_error", str(exc), True)
         if isinstance(exc, FlowExecutionError):
@@ -761,6 +818,35 @@ class IntegrationRunner:
             tenant_id=tenant_id,
             flow_id=flow.id,
             job_id=job.id,
+            error_type=error_type,
+            error_message=error_message,
+            normalized_message=normalized_message,
+            raw_error_masked=raw_error_masked,
+            retryable=retryable,
+            correlation_id=correlation_id,
+        )
+        self.session.add(error)
+        return error
+
+    def _record_connection_error(
+        self,
+        *,
+        tenant_id: str,
+        log_id: str,
+        error_type: str,
+        error_message: str,
+        normalized_message: str,
+        raw_error: Exception,
+        retryable: bool,
+        correlation_id: str | None,
+    ) -> IntegrationError:
+        raw_error_masked = json.dumps(mask_payload_for_logging({"error": str(raw_error)}), ensure_ascii=False)
+        error = IntegrationError(
+            id=str(uuid4()),
+            tenant_id=tenant_id,
+            flow_id=None,
+            job_id=None,
+            log_id=log_id,
             error_type=error_type,
             error_message=error_message,
             normalized_message=normalized_message,

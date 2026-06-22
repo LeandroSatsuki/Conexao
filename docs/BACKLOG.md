@@ -30,10 +30,10 @@
 - [x] Tests for tenants, flows, mappings, jobs, mapper, and idempotency
 
 ## Next steps
-- [ ] Real Sankhya execution in homologation
+- [x] Real Sankhya authentication in homologation
+- [ ] First read-only Sankhya flow in homologation
 - [x] Retry and dead letter handling
 - [x] Real Celery tasks
 - [x] Structured observability
 - [ ] First real Sankhya-based execution
-- [ ] Authentication against Sankhya homologation
 - [ ] Delivery metrics and alerts

@@ -66,3 +66,27 @@ Decision: Thread a `correlation_id` through jobs, logs, and errors.
 Reason: Improves traceability and prepares the platform for future real integrations.
 Impact: Every execution can be traced end-to-end across operational tables.
 Alternatives considered: Rely on job IDs only.
+
+Date: 2026-06-22
+Decision: Support Sankhya OAuth 2.0 `POST /authenticate` as the default real auth flow.
+Reason: This is the current Sankhya recommended model for homologation and production.
+Impact: The connector now uses `client_id`, `client_secret`, and `X-Token` and keeps the access token in memory only.
+Alternatives considered: Keep the legacy `/login` path as the primary flow.
+
+Date: 2026-06-22
+Decision: Keep connection tests read-only and disable writes in this stage.
+Reason: The goal is to validate connectivity safely before any business mutation is allowed.
+Impact: `mode=real` can authenticate and optionally run `read_check`, but cannot save data.
+Alternatives considered: Enable `DatasetSP.save` for early end-to-end testing.
+
+Date: 2026-06-22
+Decision: Mask Sankhya secrets with full redaction in Sankhya-specific logs and connection summaries.
+Reason: Partial masking still reveals part of the secret and does not meet the current safety bar.
+Impact: `client_secret`, `x_token`, bearer token, and access token are rendered as `***` in Sankhya-specific audit data.
+Alternatives considered: Reuse the generic partial masking helper for all contexts.
+
+Date: 2026-06-22
+Decision: Accept `homologation` as a compatibility alias for `sandbox` in Sankhya credentials.
+Reason: Existing test data and local environments still use the legacy label.
+Impact: The connector remains compatible while the documented canonical values stay `sandbox` and `production`.
+Alternatives considered: Reject any noncanonical environment value.

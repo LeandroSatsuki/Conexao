@@ -15,6 +15,10 @@
 - Duplicates must be prevented with idempotency.
 - Temporary errors can be retried with control.
 - Duplicate payloads must return `ignored` handling and keep the idempotency key.
+- Sankhya homologation tests must be read-only in this stage.
+- `mode=mock` remains the default for connection tests.
+- `mode=real` may only authenticate and optionally run `read_check`.
+- No `DatasetSP.save` call is allowed until a later approved stage.
 - `pending` jobs are created before asynchronous processing.
 - `running` jobs must not be force-killed without an explicit operational decision.
 - `cancel_requested` is the safe signal for a running job when supported.

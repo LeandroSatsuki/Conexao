@@ -85,6 +85,8 @@ def test_connection(
     connection_id: str,
     request: Request,
     tenant_id: str = Query(..., min_length=1),
+    mode: str = Query(default="mock", pattern="^(mock|real)$"),
+    read_check: bool = Query(default=False),
     db: Session = Depends(get_db),
 ) -> ConnectionTestResponse:
     connection = db.get(Connection, connection_id)
@@ -94,7 +96,12 @@ def test_connection(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported connector platform")
 
     runner = IntegrationRunner(db)
-    result = runner.test_connection(connection, correlation_id=request.state.correlation_id)
+    result = runner.test_connection(
+        connection,
+        correlation_id=request.state.correlation_id,
+        mode=mode,
+        read_check=read_check,
+    )
     db.commit()
     db.refresh(connection)
     return ConnectionTestResponse.model_validate(result)

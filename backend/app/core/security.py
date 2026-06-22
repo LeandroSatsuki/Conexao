@@ -10,10 +10,12 @@ SENSITIVE_KEYS = {
     "refresh_token",
     "password",
     "client_secret",
+    "x_token",
     "secret",
     "appkey",
     "api_key",
     "bearer",
+    "authorization",
 }
 
 

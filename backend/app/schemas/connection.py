@@ -42,3 +42,8 @@ class ConnectionTestResponse(BaseModel):
     status: str
     last_test_status: str
     log_id: str | None = None
+    correlation_id: str | None = None
+    mode: str = "mock"
+    read_check: bool = False
+    operation: str = "connection_test"
+    details: dict[str, Any] | None = None

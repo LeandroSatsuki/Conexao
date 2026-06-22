@@ -26,6 +26,7 @@
 - Celery runs integration jobs asynchronously in a dedicated worker.
 - Sankhya is the first connector.
 - Manual flow execution is scheduled through Celery and still uses a simulated runner in this stage, with no real external API call.
+- Sankhya connection testing can run in mock mode or real OAuth mode without persisting tokens.
 
 ## Practical decisions
 - UUIDs are stored as strings for portability.
@@ -36,6 +37,7 @@
 - Retryable failures advance through `retrying` and end in `dead_letter` when attempts are exhausted.
 - Reprocess preserves history by creating a fresh execution attempt instead of rewriting previous logs.
 - `correlation_id` ties a job, its logs, and its errors together.
+- Sankhya authentication uses `client_id`, `client_secret`, and `X-Token` against `/authenticate`.
 
 ## Async execution flow
 1. The API creates a `pending` `sync_job`.

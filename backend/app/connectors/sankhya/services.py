@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.connectors.sankhya.auth import strict_mask_payload
 from app.connectors.sankhya.client import SankhyaClient
 from app.connectors.sankhya.schemas import SankhyaCredentials
+from app.core.config import get_settings
 from app.core.encryption import decrypt_secret
 from app.models.connection import Connection
 
@@ -12,7 +14,12 @@ from app.models.connection import Connection
 def decode_credentials(connection: Connection) -> SankhyaCredentials:
     raw = decrypt_secret(connection.credentials_encrypted)
     data = json.loads(raw) if raw else {}
+    settings = get_settings()
     data.setdefault("base_url", connection.base_url)
+    data.setdefault("environment", connection.environment or settings.sankhya_default_environment)
+    data.setdefault("timeout_seconds", settings.sankhya_auth_timeout_seconds)
+    data.setdefault("verify_ssl", True)
+    data.setdefault("auth_mode", "oauth_client_credentials")
     return SankhyaCredentials.model_validate(data)
 
 
@@ -27,12 +34,6 @@ def mask_connection_credentials(connection: Connection) -> dict[str, Any] | None
         if not raw:
             return None
         data = json.loads(raw)
-        masked: dict[str, Any] = {}
-        for key, value in data.items():
-            if key.lower() in {"token", "password", "client_secret", "appkey"}:
-                masked[key] = "***"
-            else:
-                masked[key] = value
-        return masked
+        return strict_mask_payload(data)
     except Exception:
         return {"credentials": "***"}

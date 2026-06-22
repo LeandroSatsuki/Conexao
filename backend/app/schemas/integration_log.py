@@ -16,6 +16,7 @@ class IntegrationLogRead(BaseModel):
     status: str
     message: str
     event_type: str
+    operation: str | None = None
     correlation_id: str | None = None
     source_platform: str | None = None
     target_platform: str | None = None

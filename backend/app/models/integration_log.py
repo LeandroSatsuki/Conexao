@@ -25,6 +25,7 @@ class IntegrationLog(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     message: Mapped[str] = mapped_column(String(500), nullable=False)
     event_type: Mapped[str] = mapped_column(String(100), nullable=False, default="integration_execution")
+    operation: Mapped[str | None] = mapped_column(String(100), nullable=True)
     correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     source_platform: Mapped[str | None] = mapped_column(String(100), nullable=True)
     target_platform: Mapped[str | None] = mapped_column(String(100), nullable=True)
