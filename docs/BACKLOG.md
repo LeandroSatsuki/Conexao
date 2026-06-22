@@ -37,5 +37,6 @@
 - [x] Real Celery tasks
 - [x] Structured observability
 - [x] First real Sankhya-based execution
-- [ ] Validate read-only real flows in homologation with catalog presets
+- [x] Validate read-only real flows in homologation with catalog presets
+- [x] Sanitized homologation validation report for cataloged reads
 - [ ] Delivery metrics and alerts

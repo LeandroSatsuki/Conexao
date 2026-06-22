@@ -117,6 +117,12 @@ The compose stack starts:
 - Cataloged read-only operations are blocked from production by default.
 - The advanced `sankhya_load_records` mode remains available for compatibility and manual tuning.
 
+## Sankhya homologation validation
+- Set `SANKHYA_BASE_URL`, `SANKHYA_CLIENT_ID`, `SANKHYA_CLIENT_SECRET`, and `SANKHYA_X_TOKEN` before running the validation script.
+- Run `python backend/scripts/validate_sankhya_readonly.py`.
+- The script validates the API, creates or reuses a tenant and Sankhya connection, creates the cataloged read-only flows, runs them through Celery, polls the jobs, and writes a sanitized JSON report under `backend/reports/`.
+- Generated reports are ignored by git and do not include raw tokens or secrets.
+
 ## Operational flow
 1. Create a tenant.
 2. Create source and target connections.
@@ -141,3 +147,4 @@ pytest
 - `ruff format .`
 - `docker compose up --build`
 - `docker compose up --build api worker`
+- `python backend/scripts/validate_sankhya_readonly.py`

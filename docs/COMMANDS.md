@@ -19,6 +19,7 @@
 - `pytest`
 - `ruff check .`
 - `ruff format .`
+- `python backend/scripts/validate_sankhya_readonly.py`
 
 ## Typical API flow
 - `Criar tenant` -> `POST /api/v1/tenants`
@@ -44,9 +45,14 @@
 - `Consultar logs` -> `GET /api/v1/logs?tenant_id=...`
 
 ## Sankhya read-only catalog
-- `Listar operações` -> `GET /api/v1/connectors/sankhya/read-operations`
-- `Detalhar operação` -> `GET /api/v1/connectors/sankhya/read-operations/{operation_name}`
-- `Criar flow catalogado` -> `POST /api/v1/flows` using `sankhya_read_partner`, `sankhya_read_product`, `sankhya_read_seller`, or `sankhya_read_company`
+- `List operations` -> `GET /api/v1/connectors/sankhya/read-operations`
+- `Get operation` -> `GET /api/v1/connectors/sankhya/read-operations/{operation_name}`
+- `Create cataloged flow` -> `POST /api/v1/flows` using `sankhya_read_partner`, `sankhya_read_product`, `sankhya_read_seller`, or `sankhya_read_company`
+
+## Sankhya homologation validation
+- `Run validation script` -> `python backend/scripts/validate_sankhya_readonly.py`
+- `Sanitized report` -> `backend/reports/sankhya_readonly_validation_YYYYMMDD_HHMMSS.json`
+- `Variables` -> `CONNECTOR_API_BASE_URL`, `VALIDATION_TENANT_NAME`, `SANKHYA_VALIDATION_CONNECTION_NAME`, `SANKHYA_BASE_URL`, `SANKHYA_CLIENT_ID`, `SANKHYA_CLIENT_SECRET`, `SANKHYA_X_TOKEN`
 
 ## Worker
 - API and worker can be started together with `docker compose up --build`.

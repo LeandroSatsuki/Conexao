@@ -126,3 +126,9 @@ Decision: Mask catalog-specific sensitive fields such as `CGC_CPF` and `CGC` in 
 Reason: Standard secret masking does not cover document numbers, and the new read-only catalog needs field-level protection.
 Impact: Partner and company reads remain auditable without exposing personal or corporate document values.
 Alternatives considered: Keep only generic token/password masking.
+
+Date: 2026-06-22
+Decision: Keep the Sankhya homologation validation routine as a local script that writes a sanitized JSON report under `backend/reports/`.
+Reason: Operators need a repeatable, auditable validation run that exercises the live homologation path without exposing credentials or polluting git history with generated reports.
+Impact: The validation suite can be executed on demand, while generated reports remain local-only and ignored by git.
+Alternatives considered: Expose the routine as a public API endpoint or commit generated reports to the repository.

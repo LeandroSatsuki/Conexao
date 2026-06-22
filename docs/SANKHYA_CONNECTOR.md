@@ -54,6 +54,13 @@ Legacy fields can still be present for compatibility, but the default flow uses 
 - Cataloged operations are blocked from production by default.
 - The advanced `sankhya_load_records` mode remains available for compatibility.
 
+## Homologation validation
+- `python backend/scripts/validate_sankhya_readonly.py` runs the formal homologation validation suite against the local Preferenza API.
+- The script creates or reuses a tenant, a Sankhya sandbox connection, and the four cataloged read-only flows.
+- The script writes a sanitized report under `backend/reports/`.
+- Reports never store raw tokens, X-Token, client secret, or access token values.
+- If one cataloged operation fails, the script keeps running the remaining ones and records the failure in the report.
+
 ## Error mapping
 - `401` -> `authentication_error`
 - `403` -> `authorization_error`

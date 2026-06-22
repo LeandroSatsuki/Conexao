@@ -30,6 +30,7 @@ Maintain `Preferenza Connector` as a modular, auditable, secure, extensible inte
 - Cover encryption, masking, idempotency, retry policy, connectors, tenants, flows, mappings, jobs, the simulated runner, Celery worker flow, dead letter, and reprocessing when those areas change.
 - Cover Sankhya OAuth authentication, read-only checks, read-only async flows, and secret masking when that connector changes.
 - Cover Sankhya read-only operation catalog and catalog-specific masking when that connector changes.
+- Cover the Sankhya homologation validation script and sanitized report handling when that workflow changes.
 - Do not break existing tests.
 
 ## Documentation
