@@ -33,12 +33,21 @@ Internal integration platform for Preferenza, starting with Sankhya and prepared
    ```powershell
    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
+6. Start the worker if you are not using Docker Compose:
+   ```powershell
+   celery -A app.workers.tasks.celery_app worker --loglevel=INFO --concurrency=1
+   ```
 
 ## Docker Compose
 Start everything with:
 ```powershell
 docker compose up --build
 ```
+The compose stack starts:
+- `api`
+- `postgres`
+- `redis`
+- `worker`
 
 ## Main endpoints
 - `POST /api/v1/tenants`
@@ -62,8 +71,10 @@ docker compose up --build
 - `DELETE /api/v1/mappings/{mapping_id}`
 - `POST /api/v1/flows/{flow_id}/run`
 - `GET /api/v1/jobs?tenant_id=...`
+- `GET /api/v1/jobs/dead-letter?tenant_id=...`
 - `GET /api/v1/jobs/{job_id}`
 - `POST /api/v1/jobs/{job_id}/cancel`
+- `POST /api/v1/jobs/{job_id}/reprocess`
 - `GET /api/v1/logs?tenant_id=...`
 
 ## Typical sequence
@@ -73,6 +84,27 @@ docker compose up --build
 4. Create field mappings.
 5. Run the flow manually.
 6. Inspect the job and logs.
+7. Reprocess dead-letter jobs when necessary.
+
+## Async execution
+- `POST /api/v1/flows/{flow_id}/run` creates a `pending` job and enqueues a Celery task.
+- `sync=true` can be used to execute the same job synchronously in test or diagnostic scenarios.
+- Retryable failures move through `retrying` and eventually `dead_letter`.
+- `POST /api/v1/jobs/{job_id}/reprocess` resets a `failed` or `dead_letter` job for another attempt.
+- `POST /api/v1/jobs/{job_id}/cancel` cancels `pending` jobs and marks `running` jobs with `cancel_requested`.
+- Every attempt writes an `integration_log` and classified failures write an `integration_error`.
+- `GET /api/v1/jobs/dead-letter?tenant_id=...` lists jobs waiting for manual recovery.
+- Each execution uses a unique `correlation_id` shared by the job, logs, and errors.
+
+## Operational flow
+1. Create a tenant.
+2. Create source and target connections.
+3. Create a flow.
+4. Create field mappings.
+5. Run the flow manually.
+6. Inspect the job status and execution logs.
+7. Reprocess `failed` or `dead_letter` jobs when needed.
+8. Cancel pending work when the execution should not continue.
 
 ## Tests
 Run tests from `backend`:
@@ -86,4 +118,5 @@ pytest
 - `pytest`
 - `ruff check .`
 - `ruff format .`
-
+- `docker compose up --build`
+- `docker compose up --build api worker`

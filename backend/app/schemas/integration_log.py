@@ -23,6 +23,9 @@ class IntegrationLogRead(BaseModel):
     target_entity: str | None = None
     duration_ms: int | None = None
     error_type: str | None = None
+    source_payload_masked: str | None = None
+    transformed_payload_masked: str | None = None
+    response_payload_masked: str | None = None
     payload_masked: str | None = None
     error_code: str | None = None
     http_status_code: int | None = None

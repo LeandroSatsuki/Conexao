@@ -22,10 +22,10 @@
 ## Current MVP behavior
 - FastAPI is the API layer.
 - PostgreSQL is the operational database.
-- Redis is prepared for queues and async processing.
-- Celery is prepared for future background jobs.
+- Redis is the queue broker and task support backend for Celery.
+- Celery runs integration jobs asynchronously in a dedicated worker.
 - Sankhya is the first connector.
-- Manual flow execution is simulated in this stage, with no real external API call.
+- Manual flow execution is scheduled through Celery and still uses a simulated runner in this stage, with no real external API call.
 
 ## Practical decisions
 - UUIDs are stored as strings for portability.
@@ -33,8 +33,18 @@
 - The API returns masked credentials only as metadata.
 - Connection tests write technical logs.
 - Duplicate flow execution can return an `ignored` job record when the same payload already succeeded.
+- Retryable failures advance through `retrying` and end in `dead_letter` when attempts are exhausted.
+- Reprocess preserves history by creating a fresh execution attempt instead of rewriting previous logs.
+- `correlation_id` ties a job, its logs, and its errors together.
+
+## Async execution flow
+1. The API creates a `pending` `sync_job`.
+2. The API enqueues `execute_flow_job(job_id)` to Celery.
+3. The worker loads the job, flow, connections, and mappings.
+4. The runner applies the mapper and executes the mocked target call.
+5. The worker persists `success`, `failed`, `retrying`, `dead_letter`, or `cancelled` state.
+6. Logs and errors keep the same `correlation_id` for traceability.
 
 ## Multi-tenant rule
 - Every operational entity starts with `tenant_id` when applicable.
 - Queries must always be filtered by tenant when listing data.
-

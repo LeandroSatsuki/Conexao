@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     sankhya_timeout_seconds: int = Field(default=30, alias="SANKHYA_TIMEOUT_SECONDS")
     celery_broker_url: str | None = Field(default=None, alias="CELERY_BROKER_URL")
     celery_result_backend: str | None = Field(default=None, alias="CELERY_RESULT_BACKEND")
+    celery_task_always_eager: bool = Field(default=False, alias="CELERY_TASK_ALWAYS_EAGER")
+    celery_task_eager_propagates: bool = Field(default=False, alias="CELERY_TASK_EAGER_PROPAGATES")
+    celery_task_default_queue: str = Field(default="preferenza", alias="CELERY_TASK_DEFAULT_QUEUE")
 
     @property
     def parsed_cors_origins(self) -> list[str]:

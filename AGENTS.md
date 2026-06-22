@@ -27,13 +27,14 @@ Maintain `Preferenza Connector` as a modular, auditable, secure, extensible inte
 ## Tests
 - Create and update tests with every functional change.
 - Do not call real external APIs in automated tests.
-- Cover encryption, masking, idempotency, retry policy, connectors, tenants, flows, mappings, jobs, and the simulated runner when those areas change.
+- Cover encryption, masking, idempotency, retry policy, connectors, tenants, flows, mappings, jobs, the simulated runner, Celery worker flow, dead letter, and reprocessing when those areas change.
 - Do not break existing tests.
 
 ## Documentation
 - Update README and relevant docs when behavior changes.
 - Register decisions in `docs/DECISIONS.md`.
 - Update `docs/BACKLOG.md` as the project advances.
+- Keep the async execution path documented when Celery, retries, or job states change.
 
 ## New connectors
 - Implement `BaseConnector`.
@@ -50,4 +51,3 @@ Maintain `Preferenza Connector` as a modular, auditable, secure, extensible inte
 - Do not remove approved functionality without explicit authorization.
 - Do not delete important documentation without replacement.
 - Do not introduce secrets, hardcoded credentials, or real production endpoints.
-

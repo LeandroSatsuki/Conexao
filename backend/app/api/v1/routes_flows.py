@@ -15,7 +15,8 @@ from app.models.sync_job import SyncJob
 from app.models.tenant import Tenant
 from app.schemas.field_mapping import FieldMappingCreate, FieldMappingRead
 from app.schemas.integration_flow import IntegrationFlowCreate, IntegrationFlowRead, IntegrationFlowUpdate
-from app.schemas.sync_job import FlowRunRequest, SyncJobRead
+from app.schemas.sync_job import FlowRunRequest, FlowRunResponse
+from app.workers.tasks import execute_flow_job
 
 router = APIRouter(prefix="/flows", tags=["flows"])
 
@@ -142,19 +143,45 @@ def delete_flow(flow_id: str, db: Session = Depends(get_db)) -> None:
     db.commit()
 
 
-@router.post("/{flow_id}/run", response_model=SyncJobRead)
+@router.post("/{flow_id}/run", response_model=FlowRunResponse)
 def run_flow(
     flow_id: str,
     payload: FlowRunRequest,
     request: Request,
     db: Session = Depends(get_db),
-) -> SyncJobRead:
+) -> FlowRunResponse:
     flow = _load_flow_or_404(db, flow_id)
     runner = IntegrationRunner(db)
-    job = runner.run_flow(flow=flow, source_payload=payload.source_payload, correlation_id=request.state.correlation_id)
+    job = runner.prepare_flow_job(
+        flow=flow,
+        source_payload=payload.source_payload,
+        correlation_id=request.state.correlation_id,
+    )
     db.commit()
     db.refresh(job)
-    return SyncJobRead.model_validate(job)
+    if job.status == "pending" and not payload.sync:
+        async_result = execute_flow_job.apply_async(args=[job.id])
+        task_id = async_result.id
+    else:
+        task_id = None
+        if payload.sync and job.status == "pending":
+            job = runner.execute_job(job.id, correlation_id=request.state.correlation_id)
+            db.commit()
+            db.refresh(job)
+    return FlowRunResponse(
+        job_id=job.id,
+        flow_id=job.flow_id or flow.id,
+        tenant_id=job.tenant_id,
+        status=job.status,
+        task_id=task_id,
+        correlation_id=job.correlation_id,
+        idempotency_key=job.idempotency_key,
+        message="Job queued"
+        if job.status == "pending"
+        else "Duplicate payload ignored"
+        if job.status == "ignored"
+        else "Job executed synchronously",
+    )
 
 
 @router.get("/{flow_id}/mappings", response_model=list[FieldMappingRead])

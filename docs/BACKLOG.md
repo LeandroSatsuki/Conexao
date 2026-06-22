@@ -31,8 +31,9 @@
 
 ## Next steps
 - [ ] Real Sankhya execution in homologation
-- [ ] Retry and dead letter handling
-- [ ] Real Celery tasks
-- [ ] Structured observability
+- [x] Retry and dead letter handling
+- [x] Real Celery tasks
+- [x] Structured observability
 - [ ] First real Sankhya-based execution
-
+- [ ] Authentication against Sankhya homologation
+- [ ] Delivery metrics and alerts

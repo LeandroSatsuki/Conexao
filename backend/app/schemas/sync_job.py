@@ -8,6 +8,18 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class FlowRunRequest(BaseModel):
     source_payload: dict[str, Any] = Field(default_factory=dict)
+    sync: bool = False
+
+
+class FlowRunResponse(BaseModel):
+    job_id: str
+    flow_id: str
+    tenant_id: str
+    status: str
+    task_id: str | None = None
+    correlation_id: str | None = None
+    idempotency_key: str | None = None
+    message: str
 
 
 class SyncJobRead(BaseModel):
@@ -18,9 +30,11 @@ class SyncJobRead(BaseModel):
     flow_id: str | None = None
     connection_id: str | None = None
     status: str
+    correlation_id: str | None = None
     attempt_count: int
     max_attempts: int
     idempotency_key: str | None = None
+    cancel_requested: bool = False
     source_payload: dict[str, Any] | None = None
     transformed_payload: dict[str, Any] | None = None
     response_payload: dict[str, Any] | None = None
@@ -35,3 +49,4 @@ class SyncJobCancelResponse(BaseModel):
     id: str
     status: str
     message: str
+    cancel_requested: bool = False

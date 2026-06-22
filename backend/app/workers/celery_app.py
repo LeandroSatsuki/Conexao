@@ -18,5 +18,12 @@ def create_celery_app() -> Celery:
         accept_content=["json"],
         timezone="UTC",
         enable_utc=True,
+        task_default_queue=settings.celery_task_default_queue,
+        task_always_eager=settings.celery_task_always_eager,
+        task_eager_propagates=settings.celery_task_eager_propagates,
+        task_acks_late=True,
+        worker_prefetch_multiplier=1,
+        broker_connection_retry_on_startup=True,
+        task_track_started=True,
     )
     return app

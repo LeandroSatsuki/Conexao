@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from app.database.session import get_session_factory
 from app.models.sync_job import SyncJob
+from app.workers.tasks import execute_flow_job, process_flow_job
 
 
 def _create_tenant(client, name: str = "Tenant A", document: str = "12345678000190") -> dict[str, object]:
@@ -63,7 +64,7 @@ def test_tenant_crud_and_blocked_delete_when_linked(client):
     assert blocked_delete.status_code == 409
 
 
-def test_flow_mapping_job_run_and_idempotency(client):
+def test_flow_mapping_job_run_and_idempotency(client, monkeypatch):
     tenant = _create_tenant(client, name="Flow Tenant")
     source_connection = _create_connection(client, tenant["id"], "Source")
     target_connection = _create_connection(client, tenant["id"], "Target")
@@ -124,11 +125,22 @@ def test_flow_mapping_job_run_and_idempotency(client):
             "password": "secret-password",
         }
     }
+    monkeypatch.setattr(
+        execute_flow_job, "apply_async", lambda *args, **kwargs: type("Result", (), {"id": "task-123"})()
+    )
+
     run_response = client.post(f"/api/v1/flows/{flow['id']}/run", json=run_payload)
     assert run_response.status_code == 200
     job = run_response.json()
-    assert job["status"] == "success"
-    assert job["transformed_payload"]["customer_name"] == "ACME Ltda"
+    assert job["status"] == "pending"
+    assert job["task_id"] == "task-123"
+    assert job["correlation_id"] is not None
+
+    process_flow_job(job["job_id"])
+
+    job_detail_response = client.get(f"/api/v1/jobs/{job['job_id']}")
+    assert job_detail_response.status_code == 200
+    assert job_detail_response.json()["status"] == "success"
 
     duplicate_response = client.post(f"/api/v1/flows/{flow['id']}/run", json=run_payload)
     assert duplicate_response.status_code == 200
@@ -139,10 +151,6 @@ def test_flow_mapping_job_run_and_idempotency(client):
     assert jobs_response.status_code == 200
     jobs = jobs_response.json()
     assert [item["status"] for item in jobs] == ["ignored", "success"]
-
-    job_detail_response = client.get(f"/api/v1/jobs/{job['id']}")
-    assert job_detail_response.status_code == 200
-    assert job_detail_response.json()["id"] == job["id"]
 
     logs_response = client.get("/api/v1/logs", params={"tenant_id": tenant["id"]})
     assert logs_response.status_code == 200
