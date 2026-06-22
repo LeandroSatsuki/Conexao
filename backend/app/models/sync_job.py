@@ -27,6 +27,7 @@ class SyncJob(Base):
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     cancel_requested: Mapped[bool] = mapped_column(default=False, nullable=False)
+    records_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     source_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     transformed_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     response_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)

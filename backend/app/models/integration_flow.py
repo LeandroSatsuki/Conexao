@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -22,6 +22,7 @@ class IntegrationFlow(Base):
     target_connection_id: Mapped[str] = mapped_column(ForeignKey("connections.id"), nullable=False)
     source_entity: Mapped[str] = mapped_column(String(100), nullable=False)
     target_entity: Mapped[str] = mapped_column(String(100), nullable=False)
+    config_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     trigger_type: Mapped[str] = mapped_column(String(50), nullable=False)
     schedule_cron: Mapped[str | None] = mapped_column(String(100), nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

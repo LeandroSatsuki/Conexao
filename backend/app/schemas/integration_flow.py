@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -15,6 +15,7 @@ class IntegrationFlowBase(BaseModel):
     target_connection_id: str
     source_entity: str
     target_entity: str
+    config_json: dict[str, Any] | None = None
     trigger_type: FlowTriggerType
     schedule_cron: str | None = None
     active: bool = True
@@ -30,6 +31,7 @@ class IntegrationFlowUpdate(BaseModel):
     target_connection_id: str | None = None
     source_entity: str | None = None
     target_entity: str | None = None
+    config_json: dict[str, Any] | None = None
     trigger_type: FlowTriggerType | None = None
     schedule_cron: str | None = None
     active: bool | None = None

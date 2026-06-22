@@ -24,6 +24,7 @@
 - `Criar tenant` -> `POST /api/v1/tenants`
 - `Criar connection` -> `POST /api/v1/connections`
 - `Criar flow` -> `POST /api/v1/flows`
+- `Criar flow Sankhya read-only` -> `POST /api/v1/flows` with `config_json.operation="sankhya_load_records"`
 - `Criar mapping` -> `POST /api/v1/flows/{flow_id}/mappings`
 - `Executar flow manual` -> `POST /api/v1/flows/{flow_id}/run`
 - `Consultar job` -> `GET /api/v1/jobs/{job_id}`
@@ -36,6 +37,11 @@
 - `Teste mock` -> `POST /api/v1/connections/{connection_id}/test?tenant_id=...&mode=mock`
 - `Teste real` -> `POST /api/v1/connections/{connection_id}/test?tenant_id=...&mode=real`
 - `Read check` -> `POST /api/v1/connections/{connection_id}/test?tenant_id=...&mode=real&read_check=true`
+
+## Sankhya read-only flow
+- `Validar fluxo` -> `POST /api/v1/flows/{flow_id}/validate`
+- `Executar leitura` -> `POST /api/v1/flows/{flow_id}/run`
+- `Consultar logs` -> `GET /api/v1/logs?tenant_id=...`
 
 ## Worker
 - API and worker can be started together with `docker compose up --build`.

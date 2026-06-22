@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     sankhya_default_environment: str = Field(default="sandbox", alias="SANKHYA_DEFAULT_ENVIRONMENT")
     sankhya_read_test_entity: str = Field(default="", alias="SANKHYA_READ_TEST_ENTITY")
     sankhya_read_test_fields: str = Field(default="", alias="SANKHYA_READ_TEST_FIELDS")
-    sankhya_read_test_limit: int = Field(default=1, alias="SANKHYA_READ_TEST_LIMIT")
+    sankhya_read_test_limit: int = Field(default=1, ge=1, le=50, alias="SANKHYA_READ_TEST_LIMIT")
     celery_broker_url: str | None = Field(default=None, alias="CELERY_BROKER_URL")
     celery_result_backend: str | None = Field(default=None, alias="CELERY_RESULT_BACKEND")
     celery_task_always_eager: bool = Field(default=False, alias="CELERY_TASK_ALWAYS_EAGER")

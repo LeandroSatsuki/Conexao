@@ -5,7 +5,7 @@ from typing import Any
 
 from app.connectors.sankhya.auth import strict_mask_payload
 from app.connectors.sankhya.client import SankhyaClient
-from app.connectors.sankhya.schemas import SankhyaCredentials
+from app.connectors.sankhya.schemas import SankhyaCredentials, SankhyaReadOperationConfig
 from app.core.config import get_settings
 from app.core.encryption import decrypt_secret
 from app.models.connection import Connection
@@ -37,3 +37,19 @@ def mask_connection_credentials(connection: Connection) -> dict[str, Any] | None
         return strict_mask_payload(data)
     except Exception:
         return {"credentials": "***"}
+
+
+def extract_read_operation_config(
+    config_json: dict[str, Any] | None,
+    *,
+    source_entity: str | None = None,
+) -> SankhyaReadOperationConfig | None:
+    if not config_json:
+        return None
+    if config_json.get("operation") != "sankhya_load_records":
+        return None
+
+    payload = dict(config_json)
+    if source_entity and not payload.get("entity_name"):
+        payload["entity_name"] = source_entity
+    return SankhyaReadOperationConfig.model_validate(payload)

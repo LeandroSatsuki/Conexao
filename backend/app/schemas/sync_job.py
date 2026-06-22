@@ -35,6 +35,7 @@ class SyncJobRead(BaseModel):
     max_attempts: int
     idempotency_key: str | None = None
     cancel_requested: bool = False
+    records_count: int | None = None
     source_payload: dict[str, Any] | None = None
     transformed_payload: dict[str, Any] | None = None
     response_payload: dict[str, Any] | None = None

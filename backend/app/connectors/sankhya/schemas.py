@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class SankhyaCredentials(BaseModel):
@@ -39,6 +39,23 @@ class SankhyaCredentials(BaseModel):
         raise ValueError("environment must be sandbox or production")
 
 
+class SankhyaReadOperationConfig(BaseModel):
+    operation: Literal["sankhya_load_records"] = "sankhya_load_records"
+    entity_name: str = Field(min_length=1)
+    fields: list[str] = Field(min_length=1)
+    criteria: dict[str, Any] | str | None = None
+    limit: int = Field(default=10, ge=1, le=50)
+    mode: Literal["mock", "real"] = "mock"
+
+    @model_validator(mode="after")
+    def _validate_fields(self) -> SankhyaReadOperationConfig:
+        cleaned_fields = [field.strip() for field in self.fields if field.strip()]
+        if not cleaned_fields:
+            raise ValueError("fields must not be empty")
+        self.fields = cleaned_fields
+        return self
+
+
 class SankhyaAuthResult(BaseModel):
     access_token: str
     token_type: str = "Bearer"
@@ -64,6 +81,19 @@ class SankhyaConnectionTestResult(BaseModel):
     correlation_id: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
     log_id: str | None = None
+
+
+class SankhyaReadOperationResult(BaseModel):
+    success: bool = True
+    operation: str = "sankhya_load_records"
+    mode: Literal["mock", "real"] = "mock"
+    entity_name: str
+    fields: list[str] = Field(default_factory=list)
+    criteria: dict[str, Any] | str | None = None
+    limit: int = 10
+    records_count: int = 0
+    records: list[dict[str, Any]] = Field(default_factory=list)
+    raw_response_masked: dict[str, Any] = Field(default_factory=dict)
 
 
 class SankhyaError(BaseModel):

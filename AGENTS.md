@@ -28,7 +28,7 @@ Maintain `Preferenza Connector` as a modular, auditable, secure, extensible inte
 - Create and update tests with every functional change.
 - Do not call real external APIs in automated tests.
 - Cover encryption, masking, idempotency, retry policy, connectors, tenants, flows, mappings, jobs, the simulated runner, Celery worker flow, dead letter, and reprocessing when those areas change.
-- Cover Sankhya OAuth authentication, read-only checks, and secret masking when that connector changes.
+- Cover Sankhya OAuth authentication, read-only checks, read-only async flows, and secret masking when that connector changes.
 - Do not break existing tests.
 
 ## Documentation
@@ -36,7 +36,7 @@ Maintain `Preferenza Connector` as a modular, auditable, secure, extensible inte
 - Register decisions in `docs/DECISIONS.md`.
 - Update `docs/BACKLOG.md` as the project advances.
 - Keep the async execution path documented when Celery, retries, or job states change.
-- Keep Sankhya authentication and read-only validation documented when that connector changes.
+- Keep Sankhya authentication, read-only validation, and read-only async flow documented when that connector changes.
 
 ## New connectors
 - Implement `BaseConnector`.

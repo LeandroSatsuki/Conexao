@@ -31,9 +31,9 @@
 
 ## Next steps
 - [x] Real Sankhya authentication in homologation
-- [ ] First read-only Sankhya flow in homologation
+- [x] First read-only Sankhya flow in homologation
 - [x] Retry and dead letter handling
 - [x] Real Celery tasks
 - [x] Structured observability
-- [ ] First real Sankhya-based execution
+- [x] First real Sankhya-based execution
 - [ ] Delivery metrics and alerts

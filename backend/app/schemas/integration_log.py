@@ -17,12 +17,14 @@ class IntegrationLogRead(BaseModel):
     message: str
     event_type: str
     operation: str | None = None
+    mode: str | None = None
     correlation_id: str | None = None
     source_platform: str | None = None
     target_platform: str | None = None
     source_entity: str | None = None
     target_entity: str | None = None
     duration_ms: int | None = None
+    records_count: int | None = None
     error_type: str | None = None
     source_payload_masked: str | None = None
     transformed_payload_masked: str | None = None

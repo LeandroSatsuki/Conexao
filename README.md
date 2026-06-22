@@ -103,6 +103,13 @@ The compose stack starts:
 - No token, secret, or X-Token is returned by the API or written to logs.
 - This stage does not write any data to Sankhya and does not use `DatasetSP.save`.
 
+## Sankhya read-only flow
+- Create the flow with `config_json.operation = "sankhya_load_records"`.
+- Configure `config_json.entity_name`, `config_json.fields`, `config_json.limit`, and `config_json.mode`.
+- `POST /api/v1/flows/{flow_id}/run` enqueues a Celery job that authenticates and calls `loadRecords` in read-only mode.
+- The worker stores masked `source_payload`, `transformed_payload`, `response_payload`, `records_count`, logs, and errors.
+- This stage still does not write any data to Sankhya and still does not use `DatasetSP.save`.
+
 ## Operational flow
 1. Create a tenant.
 2. Create source and target connections.

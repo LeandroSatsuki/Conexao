@@ -90,3 +90,21 @@ Decision: Accept `homologation` as a compatibility alias for `sandbox` in Sankhy
 Reason: Existing test data and local environments still use the legacy label.
 Impact: The connector remains compatible while the documented canonical values stay `sandbox` and `production`.
 Alternatives considered: Reject any noncanonical environment value.
+
+Date: 2026-06-22
+Decision: Store Sankhya read-only flow parameters in `integration_flows.config_json`.
+Reason: The first asynchronous Sankhya flow needs technical parameters such as `operation`, `entity_name`, `fields`, `criteria`, `limit`, and `mode` without expanding the core flow columns too early.
+Impact: The API can validate and run Sankhya read-only flows without introducing a separate operation table yet.
+Alternatives considered: Add dedicated columns for each Sankhya operation parameter.
+
+Date: 2026-06-22
+Decision: Execute Sankhya read-only flows without deduplicating by idempotency key.
+Reason: Repeated read-only validations should run again so operators can compare fresh ERP state instead of receiving an `ignored` duplicate.
+Impact: Read-only Sankhya jobs remain traceable, but repeated executions with the same config are allowed to proceed.
+Alternatives considered: Reuse the duplicate suppression used by generic flows.
+
+Date: 2026-06-22
+Decision: Persist only a masked sample of Sankhya read-only responses and record `records_count`.
+Reason: The flow may return multiple rows, but the platform must avoid storing oversized or sensitive payloads in full.
+Impact: The worker keeps auditability while limiting exposure and storage volume.
+Alternatives considered: Persist the entire response body unmodified.

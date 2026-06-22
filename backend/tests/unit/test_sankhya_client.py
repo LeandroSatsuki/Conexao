@@ -12,7 +12,7 @@ from app.connectors.sankhya.exceptions import (
     SankhyaAuthorizationError,
     SankhyaTimeoutError,
 )
-from app.connectors.sankhya.schemas import SankhyaCredentials
+from app.connectors.sankhya.schemas import SankhyaCredentials, SankhyaReadOperationConfig
 from app.connectors.sankhya.services import mask_connection_credentials
 from app.core.encryption import encrypt_secret
 from app.core.security import mask_payload
@@ -158,27 +158,31 @@ def test_real_test_connection_can_run_read_check():
             assert body["requestBody"]["dataSet"]["rootEntity"] == "Produto"
             assert body["requestBody"]["dataSet"]["entity"][0]["fieldset"]["list"] == "CODPROD, DESCRPROD"
             return httpx.Response(
-                201,
+                200,
                 json={
                     "serviceName": "CRUDServiceProvider.loadRecords",
                     "responseBody": {
-                        "entities": {
-                            "total": "1",
-                            "hasMoreResult": "false",
-                        }
+                        "entities": [
+                            {"CODPROD": "1", "DESCRPROD": "Produto 1"},
+                        ]
                     },
                 },
             )
         raise AssertionError(f"Unexpected request: {request.method} {request.url.path}")
 
     sankhya = _build_client(handler, credentials=_build_oauth_credentials())
-    sankhya._read_check_config = lambda: ("Produto", ["CODPROD", "DESCRPROD"], 1)  # type: ignore[method-assign]
+    sankhya._read_check_config = lambda: SankhyaReadOperationConfig(  # type: ignore[method-assign]
+        entity_name="Produto",
+        fields=["CODPROD", "DESCRPROD"],
+        limit=1,
+        mode="real",
+    )
 
     result = sankhya.test_connection(mode="real", read_check=True)
 
     assert result.success is True
     assert result.read_check is True
-    assert result.details["read_check"]["record_count"] == 1
+    assert result.details["read_check"]["records_count"] == 1
     assert seen_paths == ["/authenticate", "/gateway/v1/mge/service.sbr"]
     sankhya.close()
 
@@ -243,3 +247,92 @@ def test_mask_payload_hides_sankhya_tokens():
     assert masked["client_secret"] != "secret"
     assert masked["nested"]["token"] != "secret"
     assert "***" in masked["x_token"]
+
+
+def test_load_records_success_parses_and_masks_records():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/authenticate":
+            return httpx.Response(200, json={"access_token": "access-123", "expires_in": 60})
+        if request.url.path == "/gateway/v1/mge/service.sbr":
+            return httpx.Response(
+                200,
+                json={
+                    "responseBody": {
+                        "entities": [
+                            {"CODPARC": "1", "NOMEPARC": "ACME", "CGC_CPF": "12345678901"},
+                            {"CODPARC": "2", "NOMEPARC": "Beta", "CGC_CPF": "98765432100"},
+                        ]
+                    }
+                },
+            )
+        raise AssertionError(f"Unexpected request: {request.method} {request.url.path}")
+
+    sankhya = _build_client(handler, credentials=_build_oauth_credentials())
+
+    records = sankhya.load_records("Parceiro", ["CODPARC", "NOMEPARC", "CGC_CPF"], limit=10)
+
+    assert len(records) == 2
+    assert records[0]["CODPARC"] == "1"
+    assert records[0]["CGC_CPF"] != "12345678901"
+    sankhya.close()
+
+
+def test_load_records_authentication_failure_raises():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/authenticate":
+            return httpx.Response(401, json={"message": "invalid credentials"})
+        raise AssertionError(f"Unexpected request: {request.method} {request.url.path}")
+
+    sankhya = _build_client(handler, credentials=_build_oauth_credentials())
+
+    with pytest.raises(SankhyaAuthenticationError):
+        sankhya.load_records("Parceiro", ["CODPARC"], limit=1)
+    sankhya.close()
+
+
+def test_load_records_timeout_raises():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/authenticate":
+            return httpx.Response(200, json={"access_token": "access-123", "expires_in": 60})
+        if request.url.path == "/gateway/v1/mge/service.sbr":
+            raise httpx.ReadTimeout("timeout", request=request)
+        raise AssertionError(f"Unexpected request: {request.method} {request.url.path}")
+
+    sankhya = _build_client(handler, credentials=_build_oauth_credentials())
+
+    with pytest.raises(SankhyaTimeoutError):
+        sankhya.load_records("Parceiro", ["CODPARC"], limit=1)
+    sankhya.close()
+
+
+def test_load_records_403_raises():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/authenticate":
+            return httpx.Response(200, json={"access_token": "access-123", "expires_in": 60})
+        if request.url.path == "/gateway/v1/mge/service.sbr":
+            return httpx.Response(403, json={"message": "forbidden"})
+        raise AssertionError(f"Unexpected request: {request.method} {request.url.path}")
+
+    sankhya = _build_client(handler, credentials=_build_oauth_credentials())
+
+    with pytest.raises(SankhyaAuthorizationError):
+        sankhya.load_records("Parceiro", ["CODPARC"], limit=1)
+    sankhya.close()
+
+
+def test_execute_read_operation_mock_returns_sample():
+    sankhya = SankhyaClient(credentials=_build_oauth_credentials(), client=httpx.Client())
+    result = sankhya.execute_read_operation(
+        {
+            "operation": "sankhya_load_records",
+            "entity_name": "Parceiro",
+            "fields": ["CODPARC", "NOMEPARC"],
+            "limit": 2,
+            "mode": "mock",
+        }
+    )
+
+    assert result.mode == "mock"
+    assert result.records_count == 1
+    assert result.records[0]["CODPARC"] == "mock-codparc"
+    sankhya.close()

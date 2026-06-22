@@ -22,10 +22,13 @@ from app.connectors.sankhya.exceptions import (
     SankhyaUnknownError,
     SankhyaValidationError,
 )
+from app.connectors.sankhya.mapper import count_records, normalize_read_records_response
 from app.connectors.sankhya.schemas import (
     SankhyaAuthResult,
     SankhyaConnectionTestResult,
     SankhyaCredentials,
+    SankhyaReadOperationConfig,
+    SankhyaReadOperationResult,
 )
 from app.connectors.sankhya.schemas import (
     SankhyaError as SankhyaErrorSchema,
@@ -107,11 +110,10 @@ class SankhyaClient(BaseConnector):
         message = "Connection successful"
 
         if read_check:
-            read_entity, read_fields, read_limit = self._read_check_config()
-            if read_entity and read_fields:
-                read_result = self.load_records(read_entity, read_fields, limit=read_limit)
-                summary = self._summarize_read_result(read_result, read_entity, read_fields, read_limit)
-                details["read_check"] = summary
+            read_config = self._read_check_config()
+            if read_config is not None:
+                read_result = self.execute_read_operation(read_config.model_dump())
+                details["read_check"] = read_result.model_dump()
                 message = "Connection and read check successful"
             else:
                 details["read_check"] = {"skipped": True, "reason": "missing_configuration"}
@@ -128,6 +130,60 @@ class SankhyaClient(BaseConnector):
         )
 
     def load_records(
+        self,
+        entity_name: str,
+        fields: list[str],
+        criteria: dict[str, Any] | str | None = None,
+        limit: int = 1,
+    ) -> Any:
+        raw_response = self._load_records_raw(entity_name, fields, criteria=criteria, limit=limit)
+        return normalize_read_records_response(raw_response, fields=fields, limit=limit)
+
+    def execute_read_operation(
+        self,
+        operation_config: dict[str, Any] | SankhyaReadOperationConfig,
+    ) -> SankhyaReadOperationResult:
+        config = (
+            operation_config
+            if isinstance(operation_config, SankhyaReadOperationConfig)
+            else SankhyaReadOperationConfig.model_validate(operation_config)
+        )
+        if config.mode == "mock":
+            records = [
+                {field: f"mock-{field.lower()}" for field in config.fields},
+            ]
+            return SankhyaReadOperationResult(
+                success=True,
+                mode="mock",
+                entity_name=config.entity_name,
+                fields=config.fields,
+                criteria=config.criteria,
+                limit=config.limit,
+                records_count=len(records),
+                records=records,
+                raw_response_masked={"mock": True, "entity_name": config.entity_name},
+            )
+
+        raw_response = self._load_records_raw(
+            config.entity_name,
+            config.fields,
+            criteria=config.criteria,
+            limit=config.limit,
+        )
+        records = normalize_read_records_response(raw_response, fields=config.fields, limit=config.limit)
+        return SankhyaReadOperationResult(
+            success=True,
+            mode="real",
+            entity_name=config.entity_name,
+            fields=config.fields,
+            criteria=config.criteria,
+            limit=config.limit,
+            records_count=count_records(raw_response),
+            records=records,
+            raw_response_masked=mask_payload(raw_response),
+        )
+
+    def _load_records_raw(
         self,
         entity_name: str,
         fields: list[str],
@@ -164,7 +220,7 @@ class SankhyaClient(BaseConnector):
                 headers=auth.headers,
             )
             response.raise_for_status()
-            return response.json() if response.content else {}
+            return self._parse_json_any(response)
         except httpx.TimeoutException as exc:
             raise SankhyaTimeoutError(str(exc)) from exc
         except httpx.HTTPStatusError as exc:
@@ -340,6 +396,14 @@ class SankhyaClient(BaseConnector):
             return data
         raise SankhyaExternalAPIError("Unexpected response structure returned by Sankhya")
 
+    def _parse_json_any(self, response: httpx.Response) -> Any:
+        if not response.content:
+            return {}
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise SankhyaExternalAPIError("Invalid JSON returned by Sankhya") from exc
+
     def _map_http_error(self, exc: httpx.HTTPStatusError) -> SankhyaError:
         response = exc.response
         status_code = response.status_code
@@ -401,45 +465,18 @@ class SankhyaClient(BaseConnector):
             return criteria
         return {"expression": {"$": criteria}}
 
-    def _summarize_read_result(
-        self,
-        result: Any,
-        entity_name: str,
-        fields: list[str],
-        limit: int,
-    ) -> dict[str, Any]:
-        masked = mask_payload(result)
-        record_count = 0
-        has_more = False
-        if isinstance(result, dict):
-            response_body = result.get("responseBody")
-            entities = None
-            if isinstance(response_body, dict):
-                entities = response_body.get("entities")
-            if entities is None:
-                entities = result.get("entities")
-            if isinstance(entities, dict):
-                total = entities.get("total")
-                if isinstance(total, str) and total.isdigit():
-                    record_count = int(total)
-                elif isinstance(total, int):
-                    record_count = total
-                has_more = entities.get("hasMoreResult") in {"true", True}
-        return {
-            "entity": entity_name,
-            "fields": fields,
-            "limit": limit,
-            "record_count": record_count,
-            "has_more": has_more,
-            "result_masked": masked,
-        }
-
-    def _read_check_config(self) -> tuple[str | None, list[str], int]:
+    def _read_check_config(self) -> SankhyaReadOperationConfig | None:
         settings = get_settings()
-        entity = settings.sankhya_read_test_entity.strip() or None
+        entity = settings.sankhya_read_test_entity.strip()
         fields = settings.sankhya_read_test_fields_list
-        limit = settings.sankhya_read_test_limit
-        return entity, fields, limit
+        if not entity or not fields:
+            return None
+        return SankhyaReadOperationConfig(
+            entity_name=entity,
+            fields=fields,
+            limit=settings.sankhya_read_test_limit,
+            mode="real",
+        )
 
     def close(self) -> None:
         self._client.close()

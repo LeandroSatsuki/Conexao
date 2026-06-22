@@ -20,7 +20,11 @@ from app.connectors.sankhya.exceptions import (
     SankhyaUnknownError,
     SankhyaValidationError,
 )
-from app.connectors.sankhya.services import build_connector_from_connection, mask_connection_credentials
+from app.connectors.sankhya.services import (
+    build_connector_from_connection,
+    extract_read_operation_config,
+    mask_connection_credentials,
+)
 from app.core.exceptions import FlowExecutionError
 from app.core.security import mask_payload
 from app.integrations.idempotency import build_idempotency_key
@@ -59,13 +63,17 @@ class IntegrationRunner:
         correlation_id: str | None = None,
     ) -> SyncJob:
         started_at = datetime.now(UTC)
+        read_operation_config = self._read_operation_config(flow)
+        effective_source_payload = source_payload
+        if read_operation_config is not None and not effective_source_payload:
+            effective_source_payload = {"operation_config": read_operation_config.model_dump()}
         idempotency_key = build_idempotency_key(
             tenant_id=flow.tenant_id,
             flow_id=flow.id,
-            payload=source_payload or {},
+            payload=effective_source_payload or {},
         )
 
-        existing_success = self._find_success_job(idempotency_key)
+        existing_success = self._find_success_job(idempotency_key) if read_operation_config is None else None
         if existing_success is not None:
             job = self._create_job(
                 tenant_id=flow.tenant_id,
@@ -74,7 +82,7 @@ class IntegrationRunner:
                 status="ignored",
                 attempt_count=0,
                 idempotency_key=idempotency_key,
-                source_payload=source_payload,
+                source_payload=effective_source_payload,
                 started_at=started_at,
                 finished_at=started_at,
                 error_message="Duplicate payload already processed successfully",
@@ -91,7 +99,7 @@ class IntegrationRunner:
                 correlation_id=correlation_id,
                 source_connection=self._safe_load_connection(flow.source_connection_id),
                 target_connection=self._safe_load_connection(flow.target_connection_id),
-                source_payload=source_payload,
+                source_payload=effective_source_payload,
             )
             return job
 
@@ -102,7 +110,7 @@ class IntegrationRunner:
             status="pending",
             attempt_count=0,
             idempotency_key=idempotency_key,
-            source_payload=source_payload,
+            source_payload=effective_source_payload,
             started_at=None,
             correlation_id=correlation_id,
         )
@@ -158,6 +166,17 @@ class IntegrationRunner:
                 error_type="business_rule_error",
                 error_message="Flow is inactive",
                 retryable=False,
+            )
+
+        read_operation_config = self._read_operation_config(flow)
+        if read_operation_config is not None:
+            return self._execute_sankhya_read_operation(
+                flow=flow,
+                job=job,
+                started_at=started_at,
+                source_connection=source_connection,
+                target_connection=target_connection,
+                operation_config=read_operation_config,
             )
 
         mappings = self._load_mappings(flow.id)
@@ -328,6 +347,7 @@ class IntegrationRunner:
                 "connection": mask_connection_credentials(connection) or {},
                 "result": mask_payload(result_data.get("details") or {}),
             }
+            records_count = result_data.get("records_count")
             log = self._write_log(
                 id=log_id,
                 tenant_id=connection.tenant_id,
@@ -340,8 +360,10 @@ class IntegrationRunner:
                 target_platform=connection.platform,
                 source_entity=None,
                 target_entity=None,
+                mode=str(result_data.get("mode", mode)),
                 correlation_id=correlation_id,
                 duration_ms=int((datetime.now(UTC) - started_at).total_seconds() * 1000),
+                records_count=int(records_count) if records_count is not None else None,
                 error_type=None,
                 operation=operation,
                 payload_masked=json.dumps(mask_payload(payload_masked), ensure_ascii=False),
@@ -383,8 +405,10 @@ class IntegrationRunner:
                 target_platform=connection.platform,
                 source_entity=None,
                 target_entity=None,
+                mode=mode,
                 correlation_id=correlation_id,
                 duration_ms=int((datetime.now(UTC) - started_at).total_seconds() * 1000),
+                records_count=None,
                 error_type=normalized.get("error_type") or normalized.get("category"),
                 operation="connection_test",
                 payload_masked=json.dumps(mask_payload(payload_masked), ensure_ascii=False),
@@ -415,6 +439,10 @@ class IntegrationRunner:
                 "operation": "connection_test",
                 "details": {},
             }
+        finally:
+            close = getattr(connector, "close", None)
+            if callable(close):
+                close()
 
     def run_flow(
         self,
@@ -615,11 +643,13 @@ class IntegrationRunner:
         target_platform: str | None,
         source_entity: str | None,
         target_entity: str | None,
-        correlation_id: str | None,
-        duration_ms: int | None,
-        error_type: str | None,
-        operation: str | None,
-        payload_masked: str | None,
+        mode: str | None = None,
+        correlation_id: str | None = None,
+        duration_ms: int | None = None,
+        records_count: int | None = None,
+        error_type: str | None = None,
+        operation: str | None = None,
+        payload_masked: str | None = None,
     ) -> IntegrationLog:
         log = IntegrationLog(
             id=id,
@@ -631,12 +661,14 @@ class IntegrationRunner:
             message=message,
             event_type="connection_test" if connection_id and job_id is None else "flow_execution",
             operation=operation,
+            mode=mode,
             correlation_id=correlation_id,
             source_platform=source_platform,
             target_platform=target_platform,
             source_entity=source_entity,
             target_entity=target_entity,
             duration_ms=duration_ms,
+            records_count=records_count,
             error_type=error_type,
             payload_masked=payload_masked,
         )
@@ -693,6 +725,9 @@ class IntegrationRunner:
         source_payload: dict[str, Any],
         transformed_payload: dict[str, Any] | None = None,
         response_payload: dict[str, Any] | None = None,
+        mode: str | None = None,
+        records_count: int | None = None,
+        operation: str = "flow_execution",
     ) -> IntegrationLog:
         duration_ms = int((datetime.now(UTC) - started_at).total_seconds() * 1000)
         payload_to_mask = mask_payload(source_payload)
@@ -719,13 +754,15 @@ class IntegrationRunner:
             status=status,
             message=message,
             event_type="flow_execution",
-            operation="flow_execution",
+            operation=operation,
+            mode=mode,
             correlation_id=correlation_id,
             source_platform=source_connection.platform if source_connection is not None else None,
             target_platform=target_connection.platform if target_connection is not None else None,
             source_entity=flow.source_entity,
             target_entity=flow.target_entity,
             duration_ms=duration_ms,
+            records_count=records_count,
             error_type=error_type,
             payload_masked=json.dumps(payload_to_mask, ensure_ascii=False),
             source_payload_masked=source_payload_masked,
@@ -869,6 +906,7 @@ class IntegrationRunner:
         error_type: str,
         error_message: str,
         retryable: bool,
+        operation: str = "flow_execution",
     ) -> SyncJob:
         job.error_message = error_message
         job.finished_at = datetime.now(UTC)
@@ -890,6 +928,7 @@ class IntegrationRunner:
             source_connection=source_connection,
             target_connection=target_connection,
             source_payload=source_payload,
+            operation=operation,
         )
         self._record_error(
             tenant_id=flow.tenant_id,
@@ -903,6 +942,88 @@ class IntegrationRunner:
             correlation_id=job.correlation_id,
         )
         return job
+
+    def _read_operation_config(self, flow: IntegrationFlow):
+        if flow.source_connection is None:
+            return None
+        if flow.source_connection.platform.lower() != "sankhya":
+            return None
+        return extract_read_operation_config(flow.config_json, source_entity=flow.source_entity)
+
+    def _execute_sankhya_read_operation(
+        self,
+        *,
+        flow: IntegrationFlow,
+        job: SyncJob,
+        started_at: datetime,
+        source_connection: Connection,
+        target_connection: Connection,
+        operation_config,
+    ) -> SyncJob:
+        connector = build_connector_from_connection(source_connection)
+        try:
+            mappings = self._load_mappings(flow.id)
+            result = connector.execute_read_operation(operation_config)
+            raw_records = list(result.records)
+            transformed_records = raw_records
+            if mappings:
+                transformed_records = [
+                    map_fields(record, [self._mapping_to_dict(mapping) for mapping in mappings])
+                    for record in raw_records
+                ]
+            response_payload = {
+                "operation": result.operation,
+                "entity_name": result.entity_name,
+                "mode": result.mode,
+                "records_count": result.records_count,
+                "records": raw_records[:10],
+                "criteria": result.criteria,
+                "limit": result.limit,
+            }
+            job.source_payload = job.source_payload or {"operation_config": operation_config.model_dump()}
+            job.transformed_payload = {"records": transformed_records}
+            job.response_payload = response_payload
+            job.records_count = result.records_count
+            job.status = "success"
+            job.error_message = None
+            job.finished_at = datetime.now(UTC)
+            self._write_execution_log(
+                tenant_id=flow.tenant_id,
+                flow=flow,
+                job=job,
+                status="success",
+                message="Sankhya read operation executed successfully",
+                error_type=None,
+                started_at=started_at,
+                correlation_id=job.correlation_id,
+                source_connection=source_connection,
+                target_connection=target_connection,
+                source_payload=job.source_payload or {},
+                transformed_payload=job.transformed_payload,
+                response_payload=response_payload,
+                mode=result.mode,
+                records_count=result.records_count,
+                operation=result.operation,
+            )
+            return job
+        except Exception as exc:
+            classification = self._classify_exception(exc)
+            return self._finalize_failure(
+                flow=flow,
+                job=job,
+                started_at=started_at,
+                source_connection=source_connection,
+                target_connection=target_connection,
+                source_payload=job.source_payload or {},
+                error_type=classification.error_type,
+                error_message=classification.normalized_message,
+                retryable=classification.retryable,
+                operation=operation_config.operation,
+            )
+        finally:
+            close = getattr(connector, "close", None)
+            if callable(close):
+                close()
 
     def _load_connection(self, connection_id: str, tenant_id: str) -> Connection:
         connection = self.session.get(Connection, connection_id)
