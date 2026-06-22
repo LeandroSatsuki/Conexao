@@ -21,6 +21,7 @@
 - Sankhya read-only catalog operations must keep allowed fields, default fields, and masking rules fixed in code.
 - Cataloged Sankhya read-only operations are blocked from production by default.
 - Sankhya homologation validation reports must be sanitized and kept out of git history.
+- The default operational mode is on-demand; service mode remains optional for the future.
 - `mode=mock` remains the default for connection tests.
 - `mode=real` may only authenticate and optionally run `read_check`.
 - No `DatasetSP.save` call is allowed until a later approved stage.

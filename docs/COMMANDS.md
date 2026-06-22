@@ -21,6 +21,21 @@
 - `ruff format .`
 - `python backend/scripts/validate_sankhya_readonly.py`
 
+## On-demand operation
+- `Start stack` -> `.\scripts\start_on_demand.ps1`
+- `Run migration` -> `docker compose exec -T api alembic -c alembic.ini upgrade head`
+- `Run Sankhya validation` -> `.\scripts\run_sankhya_validation.ps1`
+- `Check status` -> `.\scripts\status.ps1`
+- `Stop stack` -> `.\scripts\stop_on_demand.ps1`
+- `Clean stop` -> `.\scripts\stop_on_demand.ps1 -RemoveVolumes`
+
+## Service operation
+- `Start service` -> `docker compose up -d --build`
+- `Follow API logs` -> `docker compose logs -f api`
+- `Follow worker logs` -> `docker compose logs -f worker`
+- `Restart worker` -> `docker compose restart worker`
+- `Stop service` -> `docker compose down`
+
 ## Typical API flow
 - `Criar tenant` -> `POST /api/v1/tenants`
 - `Criar connection` -> `POST /api/v1/connections`

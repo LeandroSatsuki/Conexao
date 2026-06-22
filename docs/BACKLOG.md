@@ -39,4 +39,9 @@
 - [x] First real Sankhya-based execution
 - [x] Validate read-only real flows in homologation with catalog presets
 - [x] Sanitized homologation validation report for cataloged reads
+
+## Future - only if it becomes continuous operation
 - [ ] Delivery metrics and alerts
+
+## Next real step
+- [ ] Design the first controlled write in homologation, only after the read-only validation is approved

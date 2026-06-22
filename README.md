@@ -2,6 +2,8 @@
 
 Internal integration platform for Preferenza, starting with Sankhya and prepared for new connectors.
 
+The current recommended operating mode is **on-demand**. The platform does not need to stay online 24/7 for the current stage. A continuous service mode remains available for future growth, scheduled work, or monitoring needs.
+
 ## Stack
 - Python 3.12+
 - FastAPI
@@ -48,6 +50,15 @@ The compose stack starts:
 - `postgres`
 - `redis`
 - `worker`
+
+On-demand operation is the preferred path for the current stage:
+- Start the stack when needed.
+- Run migrations.
+- Run validation or integration.
+- Review the report and logs.
+- Stop the stack.
+
+The service mode remains supported by the same stack if the project later needs continuous operation.
 
 ## Main endpoints
 - `POST /api/v1/tenants`
@@ -122,6 +133,7 @@ The compose stack starts:
 - Run `python backend/scripts/validate_sankhya_readonly.py`.
 - The script validates the API, creates or reuses a tenant and Sankhya connection, creates the cataloged read-only flows, runs them through Celery, polls the jobs, and writes a sanitized JSON report under `backend/reports/`.
 - Generated reports are ignored by git and do not include raw tokens or secrets.
+- Before any future Sankhya write stage, this validation must be executed and approved.
 
 ## Operational flow
 1. Create a tenant.
@@ -148,3 +160,7 @@ pytest
 - `docker compose up --build`
 - `docker compose up --build api worker`
 - `python backend/scripts/validate_sankhya_readonly.py`
+- `.\scripts\start_on_demand.ps1`
+- `.\scripts\run_sankhya_validation.ps1`
+- `.\scripts\status.ps1`
+- `.\scripts\stop_on_demand.ps1`

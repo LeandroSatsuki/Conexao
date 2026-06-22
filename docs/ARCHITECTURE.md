@@ -43,6 +43,11 @@
 - Read-only Sankhya flow jobs keep the access token in memory only, persist masked payload samples, and record `records_count` for traceability.
 - Cataloged read-only operations block production by default and keep field-level masking rules close to the connector.
 
+## Operational modes
+- On-demand usage is the current recommended operating mode.
+- The same Docker Compose stack can still run continuously when the project later needs a service mode.
+- Validation scripts and operational wrappers document the on-demand workflow without forcing a separate deployment shape.
+
 ## Async execution flow
 1. The API creates a `pending` `sync_job`.
 2. The API enqueues `execute_flow_job(job_id)` to Celery.

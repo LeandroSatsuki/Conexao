@@ -132,3 +132,15 @@ Decision: Keep the Sankhya homologation validation routine as a local script tha
 Reason: Operators need a repeatable, auditable validation run that exercises the live homologation path without exposing credentials or polluting git history with generated reports.
 Impact: The validation suite can be executed on demand, while generated reports remain local-only and ignored by git.
 Alternatives considered: Expose the routine as a public API endpoint or commit generated reports to the repository.
+
+Date: 2026-06-22
+Decision: Prefer on-demand operation in the current stage and keep service mode optional.
+Reason: The tool is used only a few times, so always-on operation would add cost and complexity without current benefit.
+Impact: The project documents an on-demand workflow as the default, while still preserving the existing Docker Compose stack for future continuous operation.
+Alternatives considered: Introduce mandatory 24/7 service mode now.
+
+Date: 2026-06-22
+Decision: Do not add Docker Compose profiles yet.
+Reason: The current single compose stack already supports both on-demand and service usage, so profiles would add complexity without a clear operational gain.
+Impact: On-demand and service workflows are documented with scripts and commands instead of separate compose profiles.
+Alternatives considered: Split the stack into `on-demand` and `service` compose profiles immediately.
