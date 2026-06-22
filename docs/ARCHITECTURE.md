@@ -28,6 +28,7 @@
 - Manual flow execution is scheduled through Celery and still uses a simulated runner in this stage, with no real external API call.
 - Sankhya connection testing can run in mock mode or real OAuth mode without persisting tokens.
 - Sankhya read-only flows use `integration_flows.config_json` to describe `loadRecords` operations and run asynchronously through the same worker path.
+- Sankhya read-only operation catalog provides controlled presets for partner, product, seller, and company reads.
 
 ## Practical decisions
 - UUIDs are stored as strings for portability.
@@ -40,6 +41,7 @@
 - `correlation_id` ties a job, its logs, and its errors together.
 - Sankhya authentication uses `client_id`, `client_secret`, and `X-Token` against `/authenticate`.
 - Read-only Sankhya flow jobs keep the access token in memory only, persist masked payload samples, and record `records_count` for traceability.
+- Cataloged read-only operations block production by default and keep field-level masking rules close to the connector.
 
 ## Async execution flow
 1. The API creates a `pending` `sync_job`.

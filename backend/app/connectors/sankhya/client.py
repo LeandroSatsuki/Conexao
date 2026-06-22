@@ -22,7 +22,11 @@ from app.connectors.sankhya.exceptions import (
     SankhyaUnknownError,
     SankhyaValidationError,
 )
-from app.connectors.sankhya.mapper import count_records, normalize_read_records_response
+from app.connectors.sankhya.mapper import (
+    count_records,
+    mask_payload_with_sensitive_fields,
+    normalize_read_records_response,
+)
 from app.connectors.sankhya.schemas import (
     SankhyaAuthResult,
     SankhyaConnectionTestResult,
@@ -113,7 +117,7 @@ class SankhyaClient(BaseConnector):
             read_config = self._read_check_config()
             if read_config is not None:
                 read_result = self.execute_read_operation(read_config.model_dump())
-                details["read_check"] = read_result.model_dump()
+                details["read_check"] = mask_payload(read_result.model_dump())
                 message = "Connection and read check successful"
             else:
                 details["read_check"] = {"skipped": True, "reason": "missing_configuration"}
@@ -142,6 +146,8 @@ class SankhyaClient(BaseConnector):
     def execute_read_operation(
         self,
         operation_config: dict[str, Any] | SankhyaReadOperationConfig,
+        *,
+        sensitive_fields: list[str] | tuple[str, ...] | None = None,
     ) -> SankhyaReadOperationResult:
         config = (
             operation_config
@@ -154,6 +160,7 @@ class SankhyaClient(BaseConnector):
             ]
             return SankhyaReadOperationResult(
                 success=True,
+                operation=config.operation,
                 mode="mock",
                 entity_name=config.entity_name,
                 fields=config.fields,
@@ -161,7 +168,10 @@ class SankhyaClient(BaseConnector):
                 limit=config.limit,
                 records_count=len(records),
                 records=records,
-                raw_response_masked={"mock": True, "entity_name": config.entity_name},
+                raw_response_masked=mask_payload_with_sensitive_fields(
+                    {"mock": True, "entity_name": config.entity_name},
+                    sensitive_fields=sensitive_fields,
+                ),
             )
 
         raw_response = self._load_records_raw(
@@ -170,9 +180,15 @@ class SankhyaClient(BaseConnector):
             criteria=config.criteria,
             limit=config.limit,
         )
-        records = normalize_read_records_response(raw_response, fields=config.fields, limit=config.limit)
+        records = normalize_read_records_response(
+            raw_response,
+            fields=config.fields,
+            limit=config.limit,
+            mask_sensitive_fields=False,
+        )
         return SankhyaReadOperationResult(
             success=True,
+            operation=config.operation,
             mode="real",
             entity_name=config.entity_name,
             fields=config.fields,
@@ -180,7 +196,10 @@ class SankhyaClient(BaseConnector):
             limit=config.limit,
             records_count=count_records(raw_response),
             records=records,
-            raw_response_masked=mask_payload(raw_response),
+            raw_response_masked=mask_payload_with_sensitive_fields(
+                raw_response,
+                sensitive_fields=sensitive_fields,
+            ),
         )
 
     def _load_records_raw(

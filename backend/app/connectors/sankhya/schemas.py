@@ -40,15 +40,21 @@ class SankhyaCredentials(BaseModel):
 
 
 class SankhyaReadOperationConfig(BaseModel):
-    operation: Literal["sankhya_load_records"] = "sankhya_load_records"
+    operation: str = Field(default="sankhya_load_records", min_length=1)
     entity_name: str = Field(min_length=1)
     fields: list[str] = Field(min_length=1)
     criteria: dict[str, Any] | str | None = None
     limit: int = Field(default=10, ge=1, le=50)
     mode: Literal["mock", "real"] = "mock"
 
+    @field_validator("operation", mode="before")
+    @classmethod
+    def _normalize_operation(cls, value: Any) -> str:
+        return str(value or "").strip()
+
     @model_validator(mode="after")
     def _validate_fields(self) -> SankhyaReadOperationConfig:
+        self.operation = self.operation.strip()
         cleaned_fields = [field.strip() for field in self.fields if field.strip()]
         if not cleaned_fields:
             raise ValueError("fields must not be empty")

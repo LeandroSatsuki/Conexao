@@ -1,7 +1,7 @@
-# SDK de Conectores
+# Connector SDK
 
-## Contrato mínimo
-Todo conector deve implementar `BaseConnector`:
+## Minimum contract
+Every connector must implement `BaseConnector`:
 - `authenticate()`
 - `test_connection()`
 - `get_records()`
@@ -14,16 +14,18 @@ Todo conector deve implementar `BaseConnector`:
 - `get_capabilities()`
 - `normalize_error()`
 
-## Como criar um novo conector
-1. Criar `backend/app/connectors/<nome>/`.
-2. Implementar o cliente do conector.
-3. Definir schemas de credenciais e payloads.
-4. Registrar o conector no `ConnectorRegistry`.
-5. Criar testes com mock.
-6. Atualizar a documentação específica do conector.
+## How to create a new connector
+1. Create `backend/app/connectors/<name>/`.
+2. Implement the connector client.
+3. Define credential and payload schemas.
+4. Register the connector in `ConnectorRegistry`.
+5. Create mock-based tests.
+6. Update the connector-specific documentation.
 
-## Regras
-- Não colocar regra de negócio do fluxo dentro do conector.
-- Não logar credenciais.
-- Não chamar API real em testes automatizados.
+## Rules
+- Do not put flow business rules inside the connector.
+- Do not log credentials.
+- Do not call the real API in automated tests.
 
+## Sankhya
+- Keep the read-only operation catalog and catalog-specific masking close to the connector.

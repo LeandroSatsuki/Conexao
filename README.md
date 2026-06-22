@@ -110,6 +110,13 @@ The compose stack starts:
 - The worker stores masked `source_payload`, `transformed_payload`, `response_payload`, `records_count`, logs, and errors.
 - This stage still does not write any data to Sankhya and still does not use `DatasetSP.save`.
 
+## Sankhya read-only catalog
+- `GET /api/v1/connectors/sankhya/read-operations` lists the controlled read-only operations.
+- `GET /api/v1/connectors/sankhya/read-operations/{operation_name}` shows the details of one operation.
+- Cataloged operations are safer than the advanced `sankhya_load_records` mode because they pin allowed fields, default fields, limits, and masking rules.
+- Cataloged read-only operations are blocked from production by default.
+- The advanced `sankhya_load_records` mode remains available for compatibility and manual tuning.
+
 ## Operational flow
 1. Create a tenant.
 2. Create source and target connections.

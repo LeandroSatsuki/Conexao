@@ -44,6 +44,16 @@ Legacy fields can still be present for compatibility, but the default flow uses 
 - `mode=mock` uses synthetic data and does not call Sankhya.
 - `mode=real` authenticates, calls `loadRecords`, stores `records_count`, and persists only masked samples.
 
+## Read-only catalog
+- `sankhya_read_partner` -> entity `Parceiro`, fields `CODPARC`, `NOMEPARC`, `CGC_CPF`, `TIPPESSOA`, `ATIVO`, max limit `50`
+- `sankhya_read_product` -> entity `Produto`, fields `CODPROD`, `DESCRPROD`, `REFERENCIA`, `MARCA`, `ATIVO`, max limit `50`
+- `sankhya_read_seller` -> entity `Vendedor`, fields `CODVEND`, `APELIDO`, `ATIVO`, max limit `50`
+- `sankhya_read_company` -> entity `Empresa`, fields `CODEMP`, `RAZAOSOCIAL`, `NOMEFANTASIA`, `CGC`, max limit `20`
+- Cataloged operations are safer than the advanced `sankhya_load_records` mode because they pin field allow-lists and masking rules.
+- `CGC_CPF` and `CGC` are masked in responses and logs for cataloged partner/company reads.
+- Cataloged operations are blocked from production by default.
+- The advanced `sankhya_load_records` mode remains available for compatibility.
+
 ## Error mapping
 - `401` -> `authentication_error`
 - `403` -> `authorization_error`

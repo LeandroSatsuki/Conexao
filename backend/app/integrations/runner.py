@@ -22,8 +22,9 @@ from app.connectors.sankhya.exceptions import (
 )
 from app.connectors.sankhya.services import (
     build_connector_from_connection,
-    extract_read_operation_config,
     mask_connection_credentials,
+    resolve_read_operation_request,
+    validate_catalog_read_operation,
 )
 from app.core.exceptions import FlowExecutionError
 from app.core.security import mask_payload
@@ -63,7 +64,8 @@ class IntegrationRunner:
         correlation_id: str | None = None,
     ) -> SyncJob:
         started_at = datetime.now(UTC)
-        read_operation_config = self._read_operation_config(flow)
+        read_operation = self._read_operation_resolution(flow)
+        read_operation_config = read_operation.config if read_operation is not None else None
         effective_source_payload = source_payload
         if read_operation_config is not None and not effective_source_payload:
             effective_source_payload = {"operation_config": read_operation_config.model_dump()}
@@ -168,15 +170,28 @@ class IntegrationRunner:
                 retryable=False,
             )
 
-        read_operation_config = self._read_operation_config(flow)
-        if read_operation_config is not None:
+        try:
+            read_operation = self._read_operation_resolution(flow)
+        except ValueError as exc:
+            return self._finalize_failure(
+                flow=flow,
+                job=job,
+                started_at=started_at,
+                source_connection=source_connection,
+                target_connection=target_connection,
+                source_payload=job.source_payload or {},
+                error_type="validation_error",
+                error_message=str(exc),
+                retryable=False,
+            )
+        if read_operation is not None:
             return self._execute_sankhya_read_operation(
                 flow=flow,
                 job=job,
                 started_at=started_at,
                 source_connection=source_connection,
                 target_connection=target_connection,
-                operation_config=read_operation_config,
+                read_operation=read_operation,
             )
 
         mappings = self._load_mappings(flow.id)
@@ -943,12 +958,21 @@ class IntegrationRunner:
         )
         return job
 
-    def _read_operation_config(self, flow: IntegrationFlow):
+    def _read_operation_resolution(self, flow: IntegrationFlow):
         if flow.source_connection is None:
             return None
         if flow.source_connection.platform.lower() != "sankhya":
             return None
-        return extract_read_operation_config(flow.config_json, source_entity=flow.source_entity)
+        resolution = resolve_read_operation_request(flow.config_json, source_entity=flow.source_entity)
+        if resolution is None:
+            return None
+        issues = validate_catalog_read_operation(
+            resolution,
+            connection_environment=flow.source_connection.environment,
+        )
+        if issues:
+            raise ValueError("; ".join(issues))
+        return resolution
 
     def _execute_sankhya_read_operation(
         self,
@@ -958,12 +982,16 @@ class IntegrationRunner:
         started_at: datetime,
         source_connection: Connection,
         target_connection: Connection,
-        operation_config,
+        read_operation,
     ) -> SyncJob:
         connector = build_connector_from_connection(source_connection)
         try:
+            operation_config = read_operation.config
             mappings = self._load_mappings(flow.id)
-            result = connector.execute_read_operation(operation_config)
+            result = connector.execute_read_operation(
+                operation_config,
+                sensitive_fields=read_operation.sensitive_fields,
+            )
             raw_records = list(result.records)
             transformed_records = raw_records
             if mappings:
@@ -971,17 +999,25 @@ class IntegrationRunner:
                     map_fields(record, [self._mapping_to_dict(mapping) for mapping in mappings])
                     for record in raw_records
                 ]
+            masked_transformed_records = [
+                self._mask_catalog_record(record, sensitive_fields=read_operation.sensitive_fields)
+                for record in transformed_records
+            ]
+            masked_response_records = [
+                self._mask_catalog_record(record, sensitive_fields=read_operation.sensitive_fields)
+                for record in raw_records[:10]
+            ]
             response_payload = {
                 "operation": result.operation,
                 "entity_name": result.entity_name,
                 "mode": result.mode,
                 "records_count": result.records_count,
-                "records": raw_records[:10],
+                "records": masked_response_records,
                 "criteria": result.criteria,
                 "limit": result.limit,
             }
             job.source_payload = job.source_payload or {"operation_config": operation_config.model_dump()}
-            job.transformed_payload = {"records": transformed_records}
+            job.transformed_payload = {"records": masked_transformed_records}
             job.response_payload = response_payload
             job.records_count = result.records_count
             job.status = "success"
@@ -1018,12 +1054,35 @@ class IntegrationRunner:
                 error_type=classification.error_type,
                 error_message=classification.normalized_message,
                 retryable=classification.retryable,
-                operation=operation_config.operation,
+                operation=(read_operation.config.operation if read_operation is not None else "flow_execution"),
             )
         finally:
             close = getattr(connector, "close", None)
             if callable(close):
                 close()
+
+    def _mask_catalog_record(self, record: dict[str, Any], *, sensitive_fields: tuple[str, ...]) -> dict[str, Any]:
+        if not sensitive_fields:
+            return mask_payload(record)
+        masked = mask_payload(record)
+        sensitive = {field.lower() for field in sensitive_fields}
+
+        def _mask(item: Any) -> Any:
+            if isinstance(item, dict):
+                result: dict[str, Any] = {}
+                for key, value in item.items():
+                    if key.lower() in sensitive:
+                        result[key] = "***"
+                    else:
+                        result[key] = _mask(value)
+                return result
+            if isinstance(item, list):
+                return [_mask(value) for value in item]
+            if isinstance(item, tuple):
+                return tuple(_mask(value) for value in item)
+            return item
+
+        return _mask(masked)
 
     def _load_connection(self, connection_id: str, tenant_id: str) -> Connection:
         connection = self.session.get(Connection, connection_id)

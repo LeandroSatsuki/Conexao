@@ -18,6 +18,8 @@
 - Sankhya homologation tests must be read-only in this stage.
 - Sankhya read-only flow parameters must live in `integration_flows.config_json`.
 - Read-only Sankhya executions may run again even when the configuration matches a previous success.
+- Sankhya read-only catalog operations must keep allowed fields, default fields, and masking rules fixed in code.
+- Cataloged Sankhya read-only operations are blocked from production by default.
 - `mode=mock` remains the default for connection tests.
 - `mode=real` may only authenticate and optionally run `read_check`.
 - No `DatasetSP.save` call is allowed until a later approved stage.

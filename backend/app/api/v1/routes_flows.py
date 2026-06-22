@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.connectors.sankhya.services import extract_read_operation_config
+from app.connectors.sankhya.services import resolve_read_operation_request, validate_catalog_read_operation
 from app.database.session import get_db
 from app.integrations.runner import IntegrationRunner
 from app.models.connection import Connection
@@ -66,6 +66,23 @@ def _validate_flow_connections(
         )
 
 
+def _validate_read_operation_config(
+    config_json: dict[str, object] | None,
+    *,
+    source_entity: str | None,
+    connection_environment: str | None = None,
+) -> None:
+    try:
+        resolution = resolve_read_operation_request(config_json, source_entity=source_entity)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if resolution is None:
+        return
+    issues = validate_catalog_read_operation(resolution, connection_environment=connection_environment)
+    if issues:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="; ".join(issues))
+
+
 @router.post("", response_model=IntegrationFlowRead, status_code=status.HTTP_201_CREATED)
 def create_flow(payload: IntegrationFlowCreate, db: Session = Depends(get_db)) -> IntegrationFlowRead:
     _load_tenant_or_404(db, payload.tenant_id)
@@ -75,8 +92,12 @@ def create_flow(payload: IntegrationFlowCreate, db: Session = Depends(get_db)) -
         payload.source_connection_id,
         payload.target_connection_id,
     )
-    if payload.config_json is not None:
-        extract_read_operation_config(payload.config_json, source_entity=payload.source_entity)
+    source_connection = _load_connection_or_404(db, payload.source_connection_id)
+    _validate_read_operation_config(
+        payload.config_json,
+        source_entity=payload.source_entity,
+        connection_environment=source_connection.environment,
+    )
     flow = IntegrationFlow(
         id=str(uuid4()),
         tenant_id=payload.tenant_id,
@@ -124,11 +145,12 @@ def update_flow(flow_id: str, payload: IntegrationFlowUpdate, db: Session = Depe
     target_connection_id = changes.get("target_connection_id", flow.target_connection_id)
     if "source_connection_id" in changes or "target_connection_id" in changes:
         _validate_flow_connections(db, flow.tenant_id, source_connection_id, target_connection_id)
-    if "config_json" in changes:
-        extract_read_operation_config(
-            changes.get("config_json"),
-            source_entity=changes.get("source_entity", flow.source_entity),
-        )
+    source_connection = _load_connection_or_404(db, source_connection_id)
+    _validate_read_operation_config(
+        changes.get("config_json"),
+        source_entity=changes.get("source_entity", flow.source_entity),
+        connection_environment=source_connection.environment,
+    )
 
     for field_name, value in changes.items():
         setattr(flow, field_name, value)
@@ -161,11 +183,14 @@ def run_flow(
 ) -> FlowRunResponse:
     flow = _load_flow_or_404(db, flow_id)
     runner = IntegrationRunner(db)
-    job = runner.prepare_flow_job(
-        flow=flow,
-        source_payload=payload.source_payload,
-        correlation_id=request.state.correlation_id,
-    )
+    try:
+        job = runner.prepare_flow_job(
+            flow=flow,
+            source_payload=payload.source_payload,
+            correlation_id=request.state.correlation_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     db.commit()
     db.refresh(job)
     if job.status == "pending" and not payload.sync:
@@ -206,17 +231,26 @@ def validate_flow(flow_id: str, db: Session = Depends(get_db)) -> dict[str, obje
 
     if flow.source_connection.platform.lower() == "sankhya":
         try:
-            config = extract_read_operation_config(flow.config_json, source_entity=flow.source_entity)
+            resolution = resolve_read_operation_request(flow.config_json, source_entity=flow.source_entity)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-        if config is None:
+        if resolution is None:
             details.append("Missing Sankhya read-only configuration")
             valid = False
         else:
-            details.append("Sankhya read-only configuration valid")
-            details.append(f"entity_name={config.entity_name}")
-            details.append(f"fields={len(config.fields)}")
-            details.append(f"limit={config.limit}")
+            issues = validate_catalog_read_operation(
+                resolution,
+                connection_environment=source_connection.environment,
+            )
+            if issues:
+                details.extend(issues)
+                valid = False
+            else:
+                details.append("Sankhya read-only configuration valid")
+            details.append(f"operation={resolution.config.operation}")
+            details.append(f"entity_name={resolution.config.entity_name}")
+            details.append(f"fields={len(resolution.config.fields)}")
+            details.append(f"limit={resolution.config.limit}")
     else:
         details.append("Non-Sankhya flow validation complete")
 

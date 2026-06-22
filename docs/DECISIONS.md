@@ -108,3 +108,21 @@ Decision: Persist only a masked sample of Sankhya read-only responses and record
 Reason: The flow may return multiple rows, but the platform must avoid storing oversized or sensitive payloads in full.
 Impact: The worker keeps auditability while limiting exposure and storage volume.
 Alternatives considered: Persist the entire response body unmodified.
+
+Date: 2026-06-22
+Decision: Introduce a code-based Sankhya read-only operation catalog for partner, product, seller, and company.
+Reason: Fixed operations reduce operator error and keep field allow-lists, default fields, limits, and masking rules centralized.
+Impact: The API can validate and execute safer presets while preserving the advanced `sankhya_load_records` path for compatibility.
+Alternatives considered: Keep every Sankhya read-only flow fully free-form.
+
+Date: 2026-06-22
+Decision: Block cataloged Sankhya read-only operations from production by default.
+Reason: The current stage is for safe homologation validation only and should not silently expand into production use.
+Impact: `mode=real` is restricted until a later explicit decision enables production for a specific catalog operation.
+Alternatives considered: Allow production from the start for all cataloged reads.
+
+Date: 2026-06-22
+Decision: Mask catalog-specific sensitive fields such as `CGC_CPF` and `CGC` in payloads and logs.
+Reason: Standard secret masking does not cover document numbers, and the new read-only catalog needs field-level protection.
+Impact: Partner and company reads remain auditable without exposing personal or corporate document values.
+Alternatives considered: Keep only generic token/password masking.

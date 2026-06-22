@@ -16,6 +16,11 @@ SENSITIVE_KEYS = {
     "api_key",
     "bearer",
     "authorization",
+    "cpf",
+    "cnpj",
+    "cgc",
+    "cgc_cpf",
+    "cpf_cnpj",
 }
 
 

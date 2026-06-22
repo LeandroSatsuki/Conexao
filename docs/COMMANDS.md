@@ -43,6 +43,11 @@
 - `Executar leitura` -> `POST /api/v1/flows/{flow_id}/run`
 - `Consultar logs` -> `GET /api/v1/logs?tenant_id=...`
 
+## Sankhya read-only catalog
+- `Listar operações` -> `GET /api/v1/connectors/sankhya/read-operations`
+- `Detalhar operação` -> `GET /api/v1/connectors/sankhya/read-operations/{operation_name}`
+- `Criar flow catalogado` -> `POST /api/v1/flows` using `sankhya_read_partner`, `sankhya_read_product`, `sankhya_read_seller`, or `sankhya_read_company`
+
 ## Worker
 - API and worker can be started together with `docker compose up --build`.
 - The worker consumes Celery tasks from Redis and processes `sync_job` records asynchronously.
